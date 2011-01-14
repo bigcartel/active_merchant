@@ -114,6 +114,7 @@ module ActiveMerchant #:nodoc:
                   xml.tag! 'n2:BillingType', options[:billing_agreement][:type]
                   xml.tag! 'n2:BillingAgreementDescription', options[:billing_agreement][:description]
                   xml.tag! 'n2:PaymentType', options[:billing_agreement][:payment_type] || 'InstantOnly'
+                  xml.tag! 'n2:BillingAgreementCustom', options[:billing_agreement][:custom] || nil
                 end
               end
         
