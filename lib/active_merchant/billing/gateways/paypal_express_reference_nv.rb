@@ -57,8 +57,11 @@ module ActiveMerchant #:nodoc:
         commit 'CreateBillingAgreement', post
       end
       
-      def unstore(reference_id)
-        # no-op
+      def update_billing_agreement(reference_id, status)
+        post = {}
+        add_pair(post, :referenceid, reference_id)
+        add_pair(post, :billingagreementstatus, status)
+        commit 'BillAgreementUpdate', post
       end
       
       private
