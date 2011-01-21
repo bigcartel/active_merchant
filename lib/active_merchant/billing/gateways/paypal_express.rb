@@ -25,8 +25,8 @@ module ActiveMerchant #:nodoc:
         commit 'SetExpressCheckout', build_setup_request('Sale', money, options)
       end
 
-      def details_for(token)
-        commit 'GetExpressCheckoutDetails', build_get_details_request(token)
+      def details_for(token, type ='checkout')
+        type == 'checkout' ? commit('GetExpressCheckoutDetails', build_get_details_request(token)) : commit('GetExpressTransactionDetails', build_get_transaction_details_request(token)) 
       end
 
       def authorize(money, options = {})
@@ -52,6 +52,18 @@ module ActiveMerchant #:nodoc:
         end
 
         xml.target!
+      end
+      
+      def build_get_transaction_details_request(token)
+         xml = Builder::XmlMarkup.new :indent => 2
+          xml.tag! 'GetTransactionDetailsReq', 'xmlns' => PAYPAL_NAMESPACE do
+            xml.tag! 'GetTransactionDetailsRequest', 'xmlns:n2' => EBAY_NAMESPACE do
+              xml.tag! 'n2:Version', API_VERSION
+              xml.tag! 'TransactionID', token
+            end
+          end
+
+          xml.target!
       end
       
       def build_sale_or_authorization_request(action, money, options)
@@ -108,6 +120,7 @@ module ActiveMerchant #:nodoc:
               xml.tag! 'n2:OrderDescription', options[:description]
               xml.tag! 'n2:BuyerEmail', options[:email] unless options[:email].blank?
               xml.tag! 'n2:InvoiceID', options[:order_id]
+              xml.tag! 'n2:AllowNote', options[:allow_note] ? '1' : '0'
               
               if options[:billing_agreement]
                 xml.tag! 'n2:BillingAgreementDetails' do
