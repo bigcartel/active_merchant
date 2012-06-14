@@ -1,12 +1,20 @@
 #!/usr/bin/env ruby
 $:.unshift File.expand_path('../../lib', __FILE__)
 
-require 'rubygems'
+begin
+  require 'rubygems'
+  require 'bundler'
+  Bundler.setup
+rescue LoadError => e
+  puts "Error loading bundler (#{e.message}): \"gem install bundler\" for bundler support."
+end
+
 require 'test/unit'
 require 'money'
 require 'mocha'
 require 'yaml'
 require 'active_merchant'
+require 'comm_stub'
 
 require 'active_support/core_ext/integer/time'
 require 'active_support/core_ext/numeric/time'
@@ -25,6 +33,7 @@ end
 require 'action_controller'
 require "action_view/template"
 begin
+  require 'active_support/core_ext/module/deprecation'
   require 'action_dispatch/testing/test_process'
 rescue LoadError
   require 'action_controller/test_process'
@@ -32,6 +41,12 @@ end
 require 'active_merchant/billing/integrations/action_view_helper'
 
 ActiveMerchant::Billing::Base.mode = :test
+
+if ENV['DEBUG_ACTIVE_MERCHANT'] == 'true'
+  require 'logger'
+  ActiveMerchant::Billing::Gateway.logger = Logger.new(STDOUT)
+  ActiveMerchant::Billing::Gateway.wiredump_device = STDOUT
+end
 
 # Test gateways
 class SimpleTestGateway < ActiveMerchant::Billing::Gateway
@@ -104,6 +119,11 @@ module ActiveMerchant
         assert_false validateable.valid?, "Expected to not be valid"
       end
     end
+
+    def assert_deprecation_warning(message, target)
+      target.expects(:deprecated).with(message)
+      yield
+    end
     
     private
     def clean_backtrace(&block)
@@ -128,7 +148,7 @@ module ActiveMerchant
         :first_name => 'Longbob',
         :last_name => 'Longsen',
         :verification_value => '123',
-        :type => 'visa'
+        :brand => 'visa'
       }.update(options)
 
       Billing::CreditCard.new(defaults)
@@ -173,11 +193,13 @@ module ActiveMerchant
     end
         
     def load_fixtures
-      file = File.exists?(LOCAL_CREDENTIALS) ? LOCAL_CREDENTIALS : DEFAULT_CREDENTIALS
-      yaml_data = YAML.load(File.read(file))
-      symbolize_keys(yaml_data)
-    
-      yaml_data
+      [DEFAULT_CREDENTIALS, LOCAL_CREDENTIALS].inject({}) do |credentials, file_name|
+        if File.exists?(file_name)
+          yaml_data = YAML.load(File.read(file_name))
+          credentials.merge!(symbolize_keys(yaml_data))
+        end
+        credentials
+      end
     end
     
     def symbolize_keys(hash)
@@ -194,4 +216,34 @@ Test::Unit::TestCase.class_eval do
   include ActiveMerchant::Assertions
   include ActiveMerchant::Utils
   include ActiveMerchant::Fixtures
+end
+
+module ActionViewHelperTestHelper
+
+  def self.included(base)
+    base.send(:include, ActiveMerchant::Billing::Integrations::ActionViewHelper)
+    base.send(:include, ActionView::Helpers::FormHelper)
+    base.send(:include, ActionView::Helpers::FormTagHelper)
+    base.send(:include, ActionView::Helpers::UrlHelper)
+    base.send(:include, ActionView::Helpers::TagHelper)
+    base.send(:include, ActionView::Helpers::CaptureHelper)
+    base.send(:include, ActionView::Helpers::TextHelper)
+    base.send(:attr_accessor, :output_buffer)
+  end
+
+  def setup
+    @controller = Class.new do
+      attr_reader :url_for_options
+      def url_for(options, *parameters_for_method_reference)
+        @url_for_options = options
+      end
+    end
+    @controller = @controller.new
+    @output_buffer = ''
+  end
+
+  protected
+  def protect_against_forgery?
+    false
+  end
 end

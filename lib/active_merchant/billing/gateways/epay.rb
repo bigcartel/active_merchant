@@ -8,7 +8,7 @@ module ActiveMerchant #:nodoc:
       self.money_format = :cents
       self.supported_cardtypes = [:dankort, :forbrugsforeningen, :visa, :master,
                                   :american_express, :diners_club, :jcb, :maestro]
-      self.supported_countries = ['DK']
+      self.supported_countries = ['DK', 'SE', 'NO']
       self.homepage_url = 'http://epay.dk/'
       self.display_name = 'ePay'
 
@@ -53,7 +53,7 @@ module ActiveMerchant #:nodoc:
       # login: merchant number
       # password: referrer url (for authorize authentication)
       def initialize(options = {})
-        requires!(options, :login, :password)
+        requires!(options, :login)
         @options = options
         super
       end
@@ -62,7 +62,7 @@ module ActiveMerchant #:nodoc:
         post = {}
 
         add_amount(post, money, options)
-        add_invoice(post)
+        add_invoice(post, options)
         add_creditcard_or_reference(post, credit_card_or_reference)
         add_instant_capture(post, false)
 
@@ -74,7 +74,7 @@ module ActiveMerchant #:nodoc:
 
         add_amount(post, money, options)
         add_creditcard_or_reference(post, credit_card_or_reference)
-        add_invoice(post)
+        add_invoice(post, options)
         add_instant_capture(post, true)
 
         commit(:authorize, post)
@@ -97,7 +97,7 @@ module ActiveMerchant #:nodoc:
         commit(:void, post)
       end
 
-      def credit(money, identification, options = {})
+      def refund(money, identification, options = {})
         post = {}
 
         add_amount_without_currency(post, money)
@@ -106,6 +106,10 @@ module ActiveMerchant #:nodoc:
         commit(:credit, post)
       end
 
+      def credit(money, identification, options = {})
+        deprecated CREDIT_DEPRECATION_MESSAGE
+        refund(money, identification, options)
+      end
 
       private
 
@@ -122,7 +126,7 @@ module ActiveMerchant #:nodoc:
         post[:transaction] = identification
       end
 
-      def add_invoice(post)
+      def add_invoice(post, options)
         post[:orderid] = format_order_number(options[:order_id])
       end
 
@@ -134,7 +138,7 @@ module ActiveMerchant #:nodoc:
       end
 
       def add_creditcard_or_reference(post, credit_card_or_reference)
-        if credit_card_or_reference.is_a?(CreditCard)
+        if credit_card_or_reference.respond_to?(:number)
           add_creditcard(post, credit_card_or_reference)
         else
           add_reference(post, credit_card_or_reference.to_s)
@@ -176,15 +180,23 @@ module ActiveMerchant #:nodoc:
       end
 
       def do_authorize(params)
-        headers = {
-          'Referer' => options[:password]
-        }
+        headers = {}
+        headers['Referer'] = (options[:password] || "activemerchant.org")
 
         response = raw_ssl_request(:post, 'https://' + API_HOST + '/auth/default.aspx', authorize_post_data(params), headers)
 
         # Authorize gives the response back by redirecting with the values in
         # the URL query
-        query = CGI::parse(URI.parse(response['Location'].gsub(' ', '%20')).query)
+        if location = response['Location']
+          query = CGI::parse(URI.parse(location.gsub(' ', '%20')).query)
+        else
+          return {
+            'accept' => '0',
+            'errortext' => 'ePay did not respond as expected. Please try again.',
+            'response_code' => response.code,
+            'response_message' => response.message
+          }
+        end
 
         result = {}
         query.each_pair do |k,v|
@@ -247,6 +259,7 @@ module ActiveMerchant #:nodoc:
 
       def authorize_post_data(params = {})
         params[:language] = '2'
+        params[:cms] = 'activemerchant'
         params[:accepturl] = 'https://ssl.ditonlinebetalingssystem.dk/auth/default.aspx?accept=1'
         params[:declineurl] = 'https://ssl.ditonlinebetalingssystem.dk/auth/default.aspx?decline=1'
         params[:merchantnumber] = @options[:login]

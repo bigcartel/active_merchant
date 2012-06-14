@@ -1,4 +1,4 @@
-require_library_or_gem 'action_pack'
+require 'action_pack'
 
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
@@ -21,7 +21,7 @@ module ActiveMerchant #:nodoc:
         #    <% service.customer :first_name => 'Cody',
         #                       :last_name => 'Fauser',
         #                       :phone => '(555)555-5555',
-        #                       :email => 'codyfauser@gmail.com' %>
+        #                       :email => 'cody@example.com' %>
         #
         #    <% service.billing_address :city => 'Ottawa',
         #                              :address1 => '21 Snowy Brook Lane',
@@ -55,7 +55,11 @@ module ActiveMerchant #:nodoc:
           service.form_fields.each do |field, value|
             result << hidden_field_tag(field, value)
           end
-         
+          
+          service.raw_html_fields.each do |field, value|
+            result << "<input id=\"#{field}\" name=\"#{field}\" type=\"hidden\" value=\"#{value}\" />\n"
+          end
+          
           result << '</form>'
           result= result.join("\n")
           

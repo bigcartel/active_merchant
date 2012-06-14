@@ -63,11 +63,11 @@ module ActiveMerchant #:nodoc:
       self.homepage_url = 'http://www.verifi.com/'
       self.display_name = 'Verifi'
 
-    	def initialize(options = {})
+      def initialize(options = {})
         requires!(options, :login, :password)
         @options = options
         super
-    	end
+      end
 
       def purchase(money, credit_card, options = {})
         sale_authorization_or_credit_template(:purchase, money, credit_card, options)
@@ -87,10 +87,15 @@ module ActiveMerchant #:nodoc:
       
       def credit(money, credit_card_or_authorization, options = {})
         if credit_card_or_authorization.is_a?(String)
-          capture_void_or_refund_template(:refund, money, credit_card_or_authorization, options)
+          deprecated CREDIT_DEPRECATION_MESSAGE
+          refund(money, credit_card_or_authorization, options)
         else
           sale_authorization_or_credit_template(:credit, money, credit_card_or_authorization, options)
         end
+      end
+
+      def refund(money, reference, options = {})
+        capture_void_or_refund_template(:refund, money, reference, options)
       end
 
       private  
