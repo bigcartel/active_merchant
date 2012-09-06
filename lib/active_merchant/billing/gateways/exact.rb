@@ -1,7 +1,7 @@
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class ExactGateway < Gateway
-      URL = 'https://secure2.e-xact.com/vplug-in/transaction/rpc-enc/service.asmx'
+      self.live_url = self.test_url = 'https://secure2.e-xact.com/vplug-in/transaction/rpc-enc/service.asmx'
       
       API_VERSION = "8.5"
       
@@ -68,6 +68,11 @@ module ActiveMerchant #:nodoc:
       end
 
       def credit(money, authorization, options = {})
+        deprecated CREDIT_DEPRECATION_MESSAGE
+        refund(money, authorization, options)
+      end
+
+      def refund(money, authorization, options = {})
         commit(:credit, build_capture_or_credit_request(money, authorization, options))
       end
          
@@ -164,7 +169,7 @@ module ActiveMerchant #:nodoc:
       end
       
       def commit(action, request)
-         response = parse(ssl_post(URL, build_request(action, request), POST_HEADERS))
+         response = parse(ssl_post(self.live_url, build_request(action, request), POST_HEADERS))
       
          Response.new(successful?(response), message_from(response), response,
            :test => test?,

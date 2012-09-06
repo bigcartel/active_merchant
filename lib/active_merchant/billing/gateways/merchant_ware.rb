@@ -1,7 +1,7 @@
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class MerchantWareGateway < Gateway
-      URL = 'https://ps1.merchantware.net/MerchantWARE/ws/RetailTransaction/TXRetail.asmx'
+      self.live_url = self.test_url = 'https://ps1.merchantware.net/MerchantWARE/ws/RetailTransaction/TXRetail.asmx'
       
       self.supported_countries = ['US']
       self.supported_cardtypes = [:visa, :master, :american_express, :discover]
@@ -98,11 +98,17 @@ module ActiveMerchant #:nodoc:
       #   * <tt>:order_id</tt> - A unique reference for this order (required when performing a non-referenced credit)
       def credit(money, identification, options = {})
         if identification.is_a?(String)          
-          perform_reference_credit(money, identification, options)
+          deprecated CREDIT_DEPRECATION_MESSAGE
+          refund(money, identification, options)
         else
           perform_credit(money, identification, options)
         end
       end
+
+      def refund(money, reference, options = {})
+        perform_reference_credit(money, reference, options)
+      end
+
     
       private
       
@@ -255,7 +261,7 @@ module ActiveMerchant #:nodoc:
             
       def commit(action, request)
         begin
-          data = ssl_post(URL, request, 
+          data = ssl_post(self.live_url, request, 
                    "Content-Type" => 'text/xml; charset=utf-8',
                    "SOAPAction"   => "http://merchantwarehouse.com/MerchantWARE/Client/TransactionRetail/#{ACTIONS[action]}"
                  )

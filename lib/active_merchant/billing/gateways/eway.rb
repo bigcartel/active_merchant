@@ -11,14 +11,18 @@ module ActiveMerchant #:nodoc:
     #
     #   tendollar = 1000
     #
-    # Next, create a credit card object using a TC approved test card.
+    # The transaction result is based on the cent value of the transaction. $10.15 will return a failed transaction
+    # with a response code of "15 – No Issuer", while $10.00 will return "00 – Transaction Approved."
+    #
+    # Next, create a credit card object using a eWay approved test card number (4444333322221111).
     #
     #   creditcard = ActiveMerchant::Billing::CreditCard.new(
-    #	    :number => '4111111111111111',
+    #	    :number => '4444333322221111',
     #	    :month => 8,
     #	    :year => 2006,
     #	    :first_name => 'Longbob',
-    #     :last_name => 'Longsen'
+    #     :last_name => 'Longsen',
+    #     :verification_value => '123'
     #   )
     #   options = {
     #     :order_id => '1230123',
@@ -28,12 +32,12 @@ module ActiveMerchant #:nodoc:
     #                   :state => 'WA',
     #                   :country => 'Australia',
     #                   :zip => '2000'
-    #                 }
+    #                 },
     #     :description => 'purchased items'
     #   }
     #
     # To finish setting up, create the active_merchant object you will be using, with the eWay gateway. If you have a
-    # functional eWay account, replace :login with your account info. 
+    # functional eWay account, replace :login with your Customer ID.
     #
     #   gateway = ActiveMerchant::Billing::Base.gateway(:eway).new(:login => '87654321')
     #
@@ -41,7 +45,7 @@ module ActiveMerchant #:nodoc:
     #
     #   response = gateway.purchase(tendollar, creditcard, options)
     #
-    # Sending a transaction to TrustCommerce with active_merchant returns a Response object, which consistently allows you to:
+    # Sending a transaction to eWay with active_merchant returns a Response object, which consistently allows you to:
     #
     # 1) Check whether the transaction was successful
     #
@@ -60,11 +64,12 @@ module ActiveMerchant #:nodoc:
     # below and the rest of active_merchant's documentation.
 
     class EwayGateway < Gateway 
-      TEST_URL     = 'https://www.eway.com.au/gateway/xmltest/testpage.asp'
-      LIVE_URL     = 'https://www.eway.com.au/gateway/xmlpayment.asp'
-      
-      TEST_CVN_URL = 'https://www.eway.com.au/gateway_cvn/xmltest/testpage.asp'
-      LIVE_CVN_URL = 'https://www.eway.com.au/gateway_cvn/xmlpayment.asp'
+      self.test_url = 'https://www.eway.com.au/gateway/xmltest/testpage.asp'
+      self.live_url = 'https://www.eway.com.au/gateway/xmlpayment.asp'
+
+      class_attribute :test_cvn_url, :live_cvn_url
+      self.test_cvn_url = 'https://www.eway.com.au/gateway_cvn/xmltest/testpage.asp'
+      self.live_cvn_url = 'https://www.eway.com.au/gateway_cvn/xmlpayment.asp'
       
       MESSAGES = {
         "00" => "Transaction Approved",
@@ -131,7 +136,7 @@ module ActiveMerchant #:nodoc:
       
 	    self.money_format = :cents
       self.supported_countries = ['AU']
-      self.supported_cardtypes = [:visa, :master, :american_express]
+      self.supported_cardtypes = [:visa, :master, :american_express, :diners_club]
       self.homepage_url = 'http://www.eway.com.au/'
       self.display_name = 'eWAY'
 	    
@@ -143,7 +148,7 @@ module ActiveMerchant #:nodoc:
 
       # ewayCustomerEmail, ewayCustomerAddress, ewayCustomerPostcode
       def purchase(money, creditcard, options = {})
-        requires!(options, :order_id)
+        requires_address!(options)
 
         post = {}
         add_creditcard(post, creditcard)
@@ -161,6 +166,11 @@ module ActiveMerchant #:nodoc:
       end
       
       private                       
+
+      def requires_address!(options)
+        raise ArgumentError.new("Missing eWay required parameters: address or billing_address") unless (options.has_key?(:address) or options.has_key?(:billing_address))
+      end
+
       def add_creditcard(post, creditcard)
         post[:CardNumber]  = creditcard.number
         post[:CardExpiryMonth]  = sprintf("%.2i", creditcard.month)
@@ -266,9 +276,9 @@ module ActiveMerchant #:nodoc:
       
       def gateway_url(cvn, test)
         if cvn
-          test ? TEST_CVN_URL : LIVE_CVN_URL
+          test ? self.test_cvn_url : self.live_cvn_url
         else
-          test ? TEST_URL : LIVE_URL
+          test ? self.test_url : self.live_url
         end
       end
       

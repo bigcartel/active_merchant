@@ -6,8 +6,8 @@ module ActiveMerchant #:nodoc:
     class SkipJackGateway < Gateway
       API_VERSION = '?.?'
       
-      LIVE_HOST = "https://www.skipjackic.com" 
-      TEST_HOST = "https://developer.skipjackic.com"
+      self.live_url = "https://www.skipjackic.com" 
+      self.test_url = "https://developer.skipjackic.com"
       
       BASIC_PATH = "/scripts/evolvcc.dll"
       ADVANCED_PATH = "/evolvcc/evolvcc.aspx"
@@ -20,7 +20,7 @@ module ActiveMerchant #:nodoc:
       
       SUCCESS_MESSAGE = 'The transaction was successful.'
       
-      MONETARY_CHANGE_STATUSES = ['AUTHORIZE', 'AUTHORIZE ADDITIONAL', 'CREDIT', 'SPLITSETTLE']
+      MONETARY_CHANGE_STATUSES = ['SETTLE', 'AUTHORIZE', 'AUTHORIZE ADDITIONAL', 'CREDIT', 'SPLITSETTLE']
 
       CARD_CODE_ERRORS = %w( N S "" )
 
@@ -236,12 +236,17 @@ module ActiveMerchant #:nodoc:
         commit(:change_status, nil, post)
       end
 
-      def credit(money, identification, options = {})
+      def refund(money, identification, options = {})
         post = {}
         add_status_action(post, 'CREDIT')
         add_forced_settlement(post, options)
         add_transaction_id(post, identification)
         commit(:change_status, money, post)
+      end
+
+      def credit(money, identification, options = {})
+        deprecated CREDIT_DEPRECATION_MESSAGE
+        refund(money, identification, options)
       end
 
       def status(order_id)
@@ -275,7 +280,7 @@ module ActiveMerchant #:nodoc:
       end
       
       def url_for(action)
-        result = test? ? TEST_HOST : LIVE_HOST
+        result = test? ? self.test_url : self.live_url
         result += advanced? && action == :authorization ? ADVANCED_PATH : BASIC_PATH
         result += "?#{ACTIONS[action]}"
       end

@@ -4,15 +4,18 @@ module ActiveMerchant #:nodoc:
       def self.included(base)
         base.default_currency = 'USD'
           
-        base.class_inheritable_accessor :partner
+        base.class_attribute :partner
         
         # Set the default partner to PayPal
         base.partner = 'PayPal'
         
         base.supported_countries = ['US', 'CA', 'SG', 'AU']
         
-        base.class_inheritable_accessor :timeout
+        base.class_attribute :timeout
         base.timeout = 60
+
+        base.test_url = 'https://pilot-payflowpro.paypal.com'
+        base.live_url = 'https://payflowpro.paypal.com'
         
         # Enable safe retry of failed connections
         # Payflow is safe to retry because retried transactions use the same
@@ -24,8 +27,6 @@ module ActiveMerchant #:nodoc:
       end
       
       XMLNS = 'http://www.paypal.com/XMLPay'
-      TEST_URL = 'https://pilot-payflowpro.paypal.com'
-      LIVE_URL = 'https://payflowpro.paypal.com'
       
       CARD_MAPPING = {
         :visa => 'Visa',
@@ -67,27 +68,27 @@ module ActiveMerchant #:nodoc:
       
       def capture(money, authorization, options = {})
         request = build_reference_request(:capture, money, authorization, options)
-        commit(request)
+        commit(request, options)
       end
       
       def void(authorization, options = {})
         request = build_reference_request(:void, nil, authorization, options)
-        commit(request)
+        commit(request, options)
       end
   
       private      
-      def build_request(body, request_type = nil)
+      def build_request(body, options = {})
         xml = Builder::XmlMarkup.new
         xml.instruct!
         xml.tag! 'XMLPayRequest', 'Timeout' => timeout.to_s, 'version' => "2.1", "xmlns" => XMLNS do
           xml.tag! 'RequestData' do
             xml.tag! 'Vendor', @options[:login]
             xml.tag! 'Partner', @options[:partner]
-            if request_type == :recurring
+            if options[:request_type] == :recurring
               xml << body
             else
               xml.tag! 'Transactions' do
-                xml.tag! 'Transaction' do
+                xml.tag! 'Transaction', 'CustRef' => options[:customer] do
                   xml.tag! 'Verbosity', 'MEDIUM'
                   xml << body
                 end
@@ -111,7 +112,10 @@ module ActiveMerchant #:nodoc:
         
           unless money.nil?
             xml.tag! 'Invoice' do
-              xml.tag! 'TotalAmt', amount(money), 'Currency' => options[:currency] || currency(money)
+              xml.tag!('TotalAmt', amount(money), 'Currency' => options[:currency] || currency(money))
+              xml.tag!('Description', options[:description]) unless options[:description].blank?
+              xml.tag!('Comment', options[:comment]) unless options[:comment].blank?
+              xml.tag!('ExtData', 'Name'=> 'COMMENT2', 'Value'=> options[:comment2]) unless options[:comment2].blank?
             end
           end
         end
@@ -126,6 +130,7 @@ module ActiveMerchant #:nodoc:
           xml.tag! 'EMail', options[:email] unless options[:email].blank?
           xml.tag! 'Phone', address[:phone] unless address[:phone].blank?
           xml.tag! 'CustCode', options[:customer] if !options[:customer].blank? && tag == 'BillTo'
+          xml.tag! 'PONum', options[:po_number] if !options[:po_number].blank? && tag == 'BillTo'
           
           xml.tag! 'Address' do
             xml.tag! 'Street', address[:address1] unless address[:address1].blank?
@@ -189,11 +194,11 @@ module ActiveMerchant #:nodoc:
     	  }
     	end
     	
-    	def commit(request_body, request_type = nil)
-        request = build_request(request_body, request_type)
+    	def commit(request_body, options  = {})
+        request = build_request(request_body, options)
         headers = build_headers(request.size)
         
-    	  response = parse(ssl_post(test? ? TEST_URL : LIVE_URL, request, headers))
+    	  response = parse(ssl_post(test? ? self.test_url : self.live_url, request, headers))
 
     	  build_response(response[:result] == "0", response[:message], response,
     	    :test => test?,

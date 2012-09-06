@@ -1,11 +1,18 @@
 $:.unshift File.expand_path('../lib', __FILE__)
 
-require 'rubygems'
+begin
+  require 'bundler'
+  Bundler.setup
+rescue LoadError => e
+  puts "Error loading bundler (#{e.message}): \"gem install bundler\" for bundler support."
+  require 'rubygems'
+end
+
 require 'rake'
 require 'rake/testtask'
-require 'rake/rdoctask'
-require 'rake/gempackagetask'
+require 'rubygems/package_task'
 require 'support/gateway_support'
+require 'support/ssl_verify' 
 require 'support/outbound_hosts'
 
 desc "Run the unit test suite"
@@ -29,21 +36,12 @@ namespace :test do
 
 end
 
-Rake::RDocTask.new do |rdoc|
-  rdoc.rdoc_dir = 'doc'
-  rdoc.title    = "ActiveMerchant library"
-  rdoc.options << '--line-numbers' << '--inline-source' << '--main=README.rdoc'
-  rdoc.rdoc_files.include('README.rdoc', 'CHANGELOG')
-  rdoc.rdoc_files.include('lib/**/*.rb')
-  rdoc.rdoc_files.exclude('lib/tasks')
-end
-
-desc "Delete tar.gz / zip / rdoc"
-task :cleanup => [ :clobber_package, :clobber_rdoc ]
+desc "Delete tar.gz / zip"
+task :cleanup => [ :clobber_package ]
 
 spec = eval(File.read('activemerchant.gemspec'))
 
-Rake::GemPackageTask.new(spec) do |p|
+Gem::PackageTask.new(spec) do |p|
   p.gem_spec = spec
   p.need_tar = true
   p.need_zip = true
@@ -90,5 +88,9 @@ namespace :gateways do
   task :hosts do
     OutboundHosts.list
   end
-  
+ 
+  desc 'Test that gateways allow SSL verify_peer'
+  task :ssl_verify do
+    SSLVerify.new.test_gateways
+  end 
 end

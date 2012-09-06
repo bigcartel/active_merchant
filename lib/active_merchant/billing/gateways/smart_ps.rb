@@ -7,6 +7,8 @@ module ActiveMerchant #:nodoc:
       ##
       # This is the base gateway for processors who use the smartPS processing system
 
+      self.abstract_class = true
+
       def initialize(options = {})
         requires!(options, :login, :password)
         @options = options
@@ -27,6 +29,7 @@ module ActiveMerchant #:nodoc:
         add_address(post, options[:shipping_address], "shipping")
         add_customer_data(post, options)
         add_currency(post, money, options)
+        add_taxes(post, options)
         add_processor(post, options)
         commit('auth', money, post)
       end
@@ -39,6 +42,7 @@ module ActiveMerchant #:nodoc:
         add_address(post, options[:shipping_address], "shipping")
         add_customer_data(post, options)
         add_currency(post, money, options)
+        add_taxes(post, options)
         add_processor(post, options)     
         commit('sale', money, post)
       end                       
@@ -67,10 +71,10 @@ module ActiveMerchant #:nodoc:
         commit('credit', money, post)
       end
       
-      def refund(auth, options = {})
+      def refund(money, auth, options = {})
         post = {}
         add_transaction(post, auth)
-        commit('refund', options.delete(:amount), post)
+        commit('refund', money, post)
       end
       
       
@@ -145,7 +149,11 @@ module ActiveMerchant #:nodoc:
       def add_currency(post, money, options)
         post[:currency] = options[:currency] || currency(money)
       end
-      
+
+      def add_taxes(post, options)
+        post[:tax] = amount(options[:tax])
+      end
+
       def add_processor(post, options)
         post[:processor] = options[:processor] unless options[:processor].nil?
       end
@@ -212,7 +220,7 @@ module ActiveMerchant #:nodoc:
       
       def commit(action, money, parameters)
         parameters[:amount]  = amount(money) if money
-        response = parse( ssl_post(api_url, post_data(action,parameters)) )
+        response = parse( ssl_post(self.live_url, post_data(action,parameters)) )
         Response.new(response["response"] == "1", message_from(response), response, 
           :authorization => response["transactionid"],
           :test => test?,

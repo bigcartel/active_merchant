@@ -65,7 +65,7 @@ module ActiveMerchant #:nodoc:
     # below and the rest of active_merchant's documentation, as well as Trust Commerce's user and developer documentation.
     
     class TrustCommerceGateway < Gateway
-      URL = 'https://vault.trustcommerce.com/trans/'
+      self.live_url = self.test_url = 'https://vault.trustcommerce.com/trans/'
       
       SUCCESS_TYPES = ["approved", "accepted"]
       
@@ -187,15 +187,20 @@ module ActiveMerchant #:nodoc:
         commit('postauth', parameters)
       end
       
-      # credit() allows you to return money to a card that was previously billed. You need to supply the amount, in cents or a money object,
+      # refund() allows you to return money to a card that was previously billed. You need to supply the amount, in cents or a money object,
       # that you want to refund, and a TC transid for the transaction that you are refunding.
-      def credit(money, identification, options = {})  
+      def refund(money, identification, options = {})  
         parameters = {
           :amount => amount(money),
           :transid => identification
         }
                                                   
         commit('credit', parameters)
+      end
+
+      def credit(money, identification, options = {})  
+        deprecated CREDIT_DEPRECATION_MESSAGE
+        refund(money, identification, options)
       end
       
       # void() clears an existing authorization and releases the reserved fund
@@ -375,7 +380,7 @@ module ActiveMerchant #:nodoc:
         data = if tclink?
           TCLink.send(parameters)
         else
-          parse( ssl_post(URL, post_data(parameters)) )
+          parse( ssl_post(self.live_url, post_data(parameters)) )
         end
         
         # to be considered successful, transaction status must be either "approved" or "accepted"
